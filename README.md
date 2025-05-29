@@ -262,9 +262,4 @@ echo "Database version: " . $backupService->getDatabaseVersion();
 - For compression: Zlib PHP Extension
 
 ## License
-
-MIT License - See LICENSE file for details.
-
-## Contributing
-
-Bug reports, feature requests, and pull requests are always welcome. For more information, see the CONTRIBUTING.md file.
+This project is open-sourced software licensed under the [GPL license](https://www.gnu.org/copyleft/gpl.html)

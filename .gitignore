@@ -2,3 +2,10 @@
 /.git/
 /.idea
 composer.lock
+.DS_Store
+.AppleDouble
+.LSOverride
+.idea/
+.vscode/
+*.swp
+*~

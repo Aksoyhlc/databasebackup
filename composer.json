@@ -1,0 +1,36 @@
+{
+  "name": "aksoyhlc/databasebackup",
+  "description": "Advanced backup system for MySQL and MariaDB databases. This package allows you to easily backup, list, download, delete, and upload databases to FTP without using `mysqldump`.",
+  "type": "library",
+  "license": "MIT",
+  "autoload": {
+    "psr-4": {
+      "Aksoyhlc\\Databasebackup\\": "src/"
+    }
+  },
+  "authors": [
+    {
+      "name": "Aksoyhlc",
+      "email": "aksoyhlc@gmail.com"
+    }
+  ],
+  "require": {
+    "php": ">=7.4",
+    "ext-pdo": "*",
+    "ext-pdo_mysql": "*",
+    "ext-json": "*",
+    "ext-ftp": "*"
+  },
+  "minimum-stability": "stable",
+  "prefer-stable": true,
+  "keywords": [
+    "database",
+    "backup",
+    "mysql",
+    "php"
+  ],
+  "support": {
+    "issues": "https://github.com/aksoyhlc/databasebackup/issues",
+    "source": "https://github.com/aksoyhlc/databasebackup"
+  }
+}

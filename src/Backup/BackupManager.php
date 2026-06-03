@@ -213,31 +213,38 @@ class BackupManager
         $this->logger->info("Backup process is starting...");
         $startTime = microtime(true);
 
+        // Determine file name upfront
+        $compress = $this->config->isCompressOutput();
+        $fileNameSuffix = $compress ? '.sql.gz' : '.sql';
+        $fileName = 'backup_' . $this->config->getDbConfig()['dbname'] . '_' . date('Y-m-d_H-i-s') . $fileNameSuffix;
+        $filePath = $this->config->getBackupPath() . '/' . $fileName;
+
         try {
-            // Create backup content with SQL Generator
-            list($output, $currentOperation, $totalOperations) = $this->sqlGenerator->generateSqlBackup();
-
-            // Determine file name and path
-            $fileNameSuffix = $this->config->isCompressOutput() ? '.sql.gz' : '.sql';
-            $fileName = 'backup_' . $this->config->getDbConfig()['dbname'] . '_' . date('Y-m-d_H-i-s') . $fileNameSuffix;
-            $filePath = $this->config->getBackupPath() . '/' . $fileName;
-
-            // Save the file
-            if ($this->config->isCompressOutput()) {
-                $this->triggerProgress("Compressing backup: {$fileName}", ++$currentOperation, $totalOperations);
-                $gz = gzopen($filePath, 'w9');
-                if ($gz === false) {
+            // Open output handle (streaming - no memory buildup)
+            if ($compress) {
+                $handle = gzopen($filePath, 'w9');
+                if ($handle === false) {
                     throw new Exception("Compressed backup file could not be opened/written: {$filePath}");
                 }
-                gzwrite($gz, $output);
-                gzclose($gz);
-                $this->logger->info("Backup file successfully compressed: {$filePath}");
             } else {
-                if (file_put_contents($filePath, $output) === false) {
-                    throw new Exception("Backup file could not be written: {$filePath}");
+                $handle = fopen($filePath, 'w');
+                if ($handle === false) {
+                    throw new Exception("Backup file could not be opened/written: {$filePath}");
                 }
-                $this->logger->info("Backup file successfully created: {$filePath}");
             }
+
+            try {
+                // Stream backup content directly to the file handle
+                list($currentOperation, $totalOperations) = $this->sqlGenerator->generateSqlBackup($handle);
+            } finally {
+                if ($compress) {
+                    gzclose($handle);
+                } else {
+                    fclose($handle);
+                }
+            }
+
+            $this->logger->info("Backup file successfully created: {$filePath}");
 
             // Clean old backups
             $this->triggerProgress("Cleaning old backups", ++$currentOperation, $totalOperations);
@@ -252,7 +259,6 @@ class BackupManager
                     $this->logger->info("Backup file successfully uploaded to FTP: {$fileName}");
                 } catch (Exception $e) {
                     $this->logger->error('Automatic FTP backup error: ' . $e->getMessage());
-                    // FTP error doesn't make the backup creation fail, continue
                 }
             }
 
@@ -267,6 +273,10 @@ class BackupManager
             ];
 
         } catch (Exception $e) {
+            // Remove partial file on failure
+            if (file_exists($filePath)) {
+                @unlink($filePath);
+            }
             $this->logger->error('Backup error: ' . $e->getMessage());
             return [
                 'success' => false,

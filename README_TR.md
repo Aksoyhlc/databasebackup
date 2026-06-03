@@ -1,44 +1,41 @@
 # Veritabanı Yedekleme
 
-MySQL ve MariaDB veritabanları için gelişmiş yedekleme sistemi. Bu paket, `mysqldump` kullanmadanveritabanlarını kolayca yedeklemenize, listeleyebilmenize, indirebilmenize, silebilmenize ve FTP'ye yüklemenize olanak tanır.
+MySQL ve MariaDB veritabanları için yedekleme sistemi. `mysqldump` kullanmadan yedek alın, listeleyin, indirin, silin ve FTP'ye yükleyin.
 
-## Neden Bu Paketi Kullanmalısınız?
+## Neden Bu Paket
 
-### 🚀 Güvenli ve Güvenilir
-- `mysqldump` kullanmak için gerekli olan `shell_exec`/`exec` gibi tehlikeli sistem komutlarına ihtiyaç duymaz
-- Tamamen PHP tabanlı, güvenli ve kontrollü bir yedekleme süreci
-- Hosting sağlayıcılarının kısıtlamalarına takılmaz
+### Güvenli
+- `shell_exec`/`exec` gerekmez (mysqldump bunları kullanır)
+- PHP tabanlı, sistem komutu çalıştırmaz
+- Hosting kısıtlamalarına takılmaz
 
-### 💡 Kullanım Alanları
-- Paylaşımlı hosting ortamları (mysqldump erişimi olmayan)
+### Kullanım Alanları
+- Paylaşımlı hosting (mysqldump erişimi olmayan)
 - VPS ve bulut sunucular
 - Otomatik yedekleme sistemleri
 - Web tabanlı yedekleme arayüzleri
-- Çoklu veritabanı yönetimi
 
-### ⭐ Öne Çıkan Özellikler
-- `mysqldump` kullanmadan yedekleme
-- Shell komutlarına gerek kalmadan tam veritabanı yedekleme
-- Seçici yedekleme (belirli tabloları hariç tutma veya sadece yapı/veri)
-- Otomatik sıkıştırma ve FTP yükleme
-- Detaylı hata ayıklama ve günlük kaydı
-- İlerleme takibi ve durum bildirimleri
+### Öne Çıkan Özellikler
+- mysqldump bağımlılığı yok
+- Shell komutu gerektirmez
+- Tablo hariç tutma, sadece yapı veya sadece veri seçenekleri
+- Sıkıştırma ve FTP yükleme
+- Hata ayıklama ve ilerleme takibi
 
-### 🔒 Güvenlik Avantajları
-- Sistem komutlarını çalıştırma riski yok
-- Hosting sağlayıcılarının güvenlik kısıtlamalarına uyumlu
-- Kontrollü ve izole edilmiş yedekleme süreci
-- Güvenli FTP bağlantıları (SSL/TLS desteği)
+### Güvenlik
+- Sistem komutu çalıştırma riski yok
+- Hosting güvenlik kurallarıyla uyumlu
+- FTP için SSL/TLS desteği
 
 ## Özellikler
 
-- Tam veritabanı yedeği (tablolar, görünümler, tetikleyiciler ve saklı yordamlar dahil)
-- Seçili tabloların hariç tutulması veya sadece yapı/veri yedekleme
-- Yedeklerin sıkıştırılması (gzip)
-- Eski yedeklerin otomatik temizlenmesi (sayı ve yaşa göre)
-- FTP/FTPS'e otomatik veya manuel yükleme
-- İlerleme takibi
-- Kapsamlı günlük kaydı
+- Tam veritabanı yedeği (tablolar, view, trigger, stored procedure)
+- Tablo hariç tutma, sadece yapı veya sadece veri
+- Gzip sıkıştırma
+- Sayı ve yaşa göre otomatik temizlik
+- FTP/FTPS yükleme (otomatik veya manuel)
+- İlerleme geri çağrısı
+- Günlük kaydı
 
 ## Kurulum
 
@@ -172,6 +169,44 @@ $uploadResult = $backupService->uploadBackupToFtp('backup_database_2023-01-01_12
 $backupService->cleanOldBackups();
 ```
 
+## Performans
+
+DatabaseBackup, **stream mimarisi** ve **unbuffered sorgular** sayesinde her boyuttaki veritabanını minimum kaynak kullanımıyla yedekler. `mysqldump` bağımlılığı yoktur.
+
+### Benchmark (1.050.000 kayıt, 7 tablo)
+
+| Mod | Dosya Boyutu | Süre |
+|-----|-------------|------|
+| Sıkıştırmasız | 1.33 GB | 17.0 s |
+| Gzip sıkıştırmalı | 314 MB | 57.5 s |
+
+### Benchmark (Employees DB: 3.920.015 kayıt, 6 tablo + 2 view)
+
+| Mod | Dosya Boyutu | Süre |
+|-----|-------------|------|
+| Gzip sıkıştırmalı | 33.7 MB | 46.6 s |
+
+### vs `mysqldump` (1.050.000 kayıt)
+
+| Araç | Dosya Boyutu | Süre |
+|------|-------------|------|
+| **DatabaseBackup** (stream) | 1.33 GB | 17.0 s |
+| `mysqldump` | 1.30 GB | 11.8 s |
+| **DatabaseBackup** (gzip) | 314 MB | 57.5 s |
+| `mysqldump` + `gzip` (pipe) | 314 MB | 31.1 s |
+
+### Performans Özellikleri
+
+- **Stream yazma**: SQL doğrudan diske yazılır, bellekte birikmez.
+- **Unbuffered sorgular**: Satırlar tek tek çekilir, sonuç kümesi tamponlanmaz.
+- **Ayarlanabilir batch boyutu**: `batchSize` ile INSERT performansı ayarlanabilir.
+
+## Özel Karakterler
+
+UTF-8 karakterler, emoji, JSON, BLOB, backslash ve çok satırlı metin yedekleme ve geri yükleme sırasında korunur.
+
+Test edilen: `😀🔥🎉💯✅`, `👨‍👩‍👧‍👦`, `JSON`, `BLOB`, çok satırlı metin, `O'Brien`, `C:\Users\path`, null değerler.
+
 ## Günlük Mesajları
 
 ```php
@@ -235,6 +270,7 @@ echo "Veritabanı sürümü: " . $backupService->getDatabaseVersion();
 |-----------|-------------|---------|
 | `compressOutput` | Yedek dosyasını sıkıştır? (gzip) | `false` |
 | `removeDefiners` | SQL DEFINER ifadelerini kaldır? | `true` |
+| `batchSize` | INSERT başına satır sayısı | `100` |
 
 #### İlerleme Takibi
 | Parametre | Açıklama | Varsayılan |

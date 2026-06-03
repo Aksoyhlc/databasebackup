@@ -28,7 +28,7 @@ use Aksoyhlc\Databasebackup\Storage\FtpUploader;
  *
  * @package Aksoyhlc\Databasebackup
  * @author Ökkeş Aksoy <aksoyhlc@gmail.com>
- * @version 1.0.0
+ * @version 1.1.0
  */
 class DatabaseBackupService
 {
@@ -94,6 +94,7 @@ class DatabaseBackupService
      *                       # Backup Format Settings
      *                       - 'compressOutput': Compress the backup file? (default: false)
      *                       - 'removeDefiners': Remove SQL DEFINER statements? (default: true)
+     *                       - 'batchSize': Number of rows per INSERT statement (default: 100)
      *
      *                       # Progress Tracking
      *                       - 'progressCallback': Progress callback function (default: null)

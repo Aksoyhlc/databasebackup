@@ -74,6 +74,12 @@ class ConfigManager
     private bool $compressOutput = false;
 
     /**
+     * Batch size for INSERT statements
+     * @var int
+     */
+    private int $batchSize = 100;
+
+    /**
      * Should DEFINER statements be removed?
      * @var bool
      */
@@ -166,6 +172,7 @@ class ConfigManager
         $this->tableModes = $options['tableModes'] ?? [];
         $this->compressOutput = $options['compressOutput'] ?? false;
         $this->removeDefiners = $options['removeDefiners'] ?? true;
+        $this->batchSize = $options['batchSize'] ?? 100;
         if (isset($options['progressCallback']) && is_callable($options['progressCallback'])) {
             $this->progressCallback = $options['progressCallback'];
         }
@@ -277,6 +284,16 @@ class ConfigManager
     public function getTableModes(): array
     {
         return $this->tableModes;
+    }
+
+    /**
+     * Returns the batch size for INSERT statements
+     *
+     * @return int Batch size
+     */
+    public function getBatchSize(): int
+    {
+        return $this->batchSize;
     }
 
     /**

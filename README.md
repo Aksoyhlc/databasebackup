@@ -1,44 +1,41 @@
 # Database Backup
 
-Advanced backup system for MySQL and MariaDB databases. This package allows you to easily backup, list, download, delete, and upload databases to FTP without using `mysqldump`.
+Backup system for MySQL and MariaDB databases. Create, list, download, delete, and upload backups to FTP without `mysqldump`.
 
-## Why Should You Use This Package?
+## Why Use This Package
 
-### 🚀 Safe and Reliable
-- No need for dangerous system commands like `shell_exec`/`exec` required for `mysqldump`
-- Completely PHP-based, safe and controlled backup process
-- Not affected by hosting provider restrictions
+### Safe and Reliable
+- No shell_exec or exec required (mysqldump needs these)
+- PHP-based, no system command execution
+- Works under hosting provider restrictions
 
-### 💡 Use Cases
-- Shared hosting environments (where mysqldump access is not available)
+### Use Cases
+- Shared hosting without mysqldump access
 - VPS and cloud servers
 - Automated backup systems
 - Web-based backup interfaces
-- Multiple database management
 
-### ⭐ Key Features
-- Backup without using `mysqldump`
+### Key Features
+- No mysqldump dependency
 - Full database backup without shell commands
-- Selective backup (exclude specific tables or backup only structure/data)
-- Automatic compression and FTP upload
-- Detailed debugging and logging
-- Progress tracking and status notifications
+- Selective backup (exclude tables, structure-only, data-only)
+- Optional compression and FTP upload
+- Debug logging and progress tracking
 
-### 🔒 Security Advantages
-- No risk of executing system commands
-- Compatible with hosting provider security restrictions
-- Controlled and isolated backup process
-- Secure FTP connections (SSL/TLS support)
+### Security
+- No system command execution risk
+- Compatible with hosting security rules
+- SSL/TLS for FTP connections
 
 ## Features
 
-- Complete database backup (including tables, views, triggers, and stored procedures)
-- Exclusion of selected tables or backing up only structure/data
-- Compression of backups (gzip)
-- Automatic cleanup of old backups (based on number and age)
-- Automatic or manual upload to FTP/FTPS
-- Progress tracking
-- Comprehensive logging
+- Full database backup (tables, views, triggers, stored procedures)
+- Exclude specific tables or backup only structure or data
+- Gzip compression
+- Auto-cleanup by count or age
+- FTP/FTPS upload (automatic or manual)
+- Progress callback
+- Logging
 
 ## Installation
 
@@ -172,6 +169,44 @@ $uploadResult = $backupService->uploadBackupToFtp('backup_database_2023-01-01_12
 $backupService->cleanOldBackups();
 ```
 
+## Performance
+
+DatabaseBackup uses **streaming architecture** and **unbuffered queries** to handle databases of any size with minimal resource usage. No `mysqldump` dependency required.
+
+### Benchmarks (1,050,000 records, 7 tables)
+
+| Mode | File Size | Duration |
+|------|-----------|----------|
+| Uncompressed | 1.33 GB | 17.0 s |
+| Gzip compressed | 314 MB | 57.5 s |
+
+### Benchmark (Employees DB: 3,920,015 records, 6 tables + 2 views)
+
+| Mode | File Size | Duration |
+|------|-----------|----------|
+| Gzip compressed | 33.7 MB | 46.6 s |
+
+### vs `mysqldump` (1,050,000 records)
+
+| Tool | File Size | Duration |
+|------|-----------|----------|
+| **DatabaseBackup** (stream) | 1.33 GB | 17.0 s |
+| `mysqldump` | 1.30 GB | 11.8 s |
+| **DatabaseBackup** (gzip) | 314 MB | 57.5 s |
+| `mysqldump` + `gzip` (pipe) | 314 MB | 31.1 s |
+
+### Key Performance Features
+
+- **Streaming writes**: SQL goes directly to disk, not accumulated in memory.
+- **Unbuffered queries**: One row at a time, no result set buffering.
+- **Configurable batch size**: Tune `batchSize` for INSERT performance.
+
+## Special Characters
+
+UTF-8 characters, emoji, JSON, BLOB, backslash, and multi-line text are preserved during backup and restore.
+
+Tested with: `😀🔥🎉💯✅`, `👨‍👩‍👧‍👦`, `JSON`, `BLOB`, multi-line text, `O'Brien`, `C:\Users\path`, null values.
+
 ## Log Messages
 
 ```php
@@ -235,6 +270,7 @@ echo "Database version: " . $backupService->getDatabaseVersion();
 |-----------|-------------|---------|
 | `compressOutput` | Compress the backup file? (gzip) | `false` |
 | `removeDefiners` | Remove SQL DEFINER statements? | `true` |
+| `batchSize` | Number of rows per INSERT statement | `100` |
 
 #### Progress Tracking
 | Parameter | Description | Default |

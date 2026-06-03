@@ -80,7 +80,7 @@ class DatabaseConnection
             $serverPdo = new PDO($serverDsn, $user, $pass, $pdoOptions);
             
             // Check if the database exists
-            $stmt = $serverPdo->query("SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = '{$db}'");
+            $stmt = $serverPdo->query("SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = " . $serverPdo->quote($db));
             $dbExists = $stmt->fetchColumn();
             
             if (!$dbExists) {
@@ -103,7 +103,7 @@ class DatabaseConnection
                     $serverPdo = new PDO($alternativeServerDsn, $user, $pass, $pdoOptions);
                     
                     // Check if the database exists
-                    $stmt = $serverPdo->query("SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = '{$db}'");
+                    $stmt = $serverPdo->query("SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = " . $serverPdo->quote($db));
                     $dbExists = $stmt->fetchColumn();
                     
                     if (!$dbExists) {

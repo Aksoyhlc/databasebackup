@@ -6,8 +6,8 @@ require __DIR__ . '/../vendor/autoload.php';
 
 use Aksoyhlc\Databasebackup\DatabaseBackupService;
 
-const TEST_DB_HOST = "127.0.1";
-const TEST_DB_NAME = "test_backup_db";
+const TEST_DB_HOST = "127.0.0.1";
+const TEST_DB_NAME = "test_database";
 const TEST_DB_USER = "root";
 const TEST_DB_PASS = "";
 const TEST_DB_CHARSET = "utf8mb4";
@@ -23,16 +23,12 @@ function test_case(string $description, callable $testFunction): void
     echo "TEST: {$description}\n";
     try {
         if (is_dir(TEST_BACKUP_PATH)) {
-            $files = new RecursiveIteratorIterator(
-                new RecursiveDirectoryIterator(
-                    TEST_BACKUP_PATH,
-                    FilesystemIterator::SKIP_DOTS
-                ),
-                RecursiveIteratorIterator::CHILD_FIRST
-            );
-            foreach ($files as $fileinfo) {
-                $todo = $fileinfo->isDir() ? "rmdir" : "unlink";
-                @$todo($fileinfo->getRealPath());
+            foreach (glob(TEST_BACKUP_PATH . '/*') as $file) {
+                if (is_file($file)) {
+                    @unlink($file);
+                } elseif (is_dir($file)) {
+                    @rmdir($file);
+                }
             }
             @rmdir(TEST_BACKUP_PATH);
         }
@@ -46,7 +42,7 @@ function test_case(string $description, callable $testFunction): void
             "status" => "PASSED",
             "description" => $description,
         ];
-        echo "SONUÇ: BAŞARILI\n";
+        echo "RESULT: PASSED\n";
     } catch (Exception $e) {
         $testResults["failed"]++;
         $testResults["details"][] = [
@@ -54,74 +50,54 @@ function test_case(string $description, callable $testFunction): void
             "description" => $description,
             "message" => $e->getMessage(),
         ];
-        echo "SONUÇ: BAŞARISIZ - Hata: " . $e->getMessage() . "\n";
+        echo "RESULT: FAILED - Error: " . $e->getMessage() . "\n";
     }
     echo "--------------------------------------------------\n\n";
 }
 
-function assert_true(
-    $condition,
-    string $message = "Assertion failed: condition is not true"
-): void
+function assert_true($condition, string $message = "Assertion failed: condition is not true"): void
 {
     if ($condition !== true) {
         throw new Exception($message);
     }
 }
 
-function assert_not_empty(
-    $value,
-    string $message = "Assertion failed: value is empty"
-): void
+function assert_not_empty($value, string $message = "Assertion failed: value is empty"): void
 {
     if (empty($value)) {
         throw new Exception($message);
     }
 }
 
-function assert_file_exists(
-    string $filename,
-    string $message = "Assertion failed: file does not exist"
-): void
+function assert_file_exists(string $filename, string $message = "Assertion failed: file does not exist"): void
 {
     if (!file_exists($filename)) {
         throw new Exception($message . " ({$filename})");
     }
 }
 
-function assert_contains_string(
-    string $haystack,
-    string $needle,
-    string $message = "Assertion failed: haystack does not contain needle"
-): void
+function assert_contains_string(string $haystack, string $needle, string $message = "Assertion failed: haystack does not contain needle"): void
 {
     if (strpos($haystack, $needle) === false) {
-        throw new Exception($message . " (Aranan: {$needle})");
+        throw new Exception($message . " (Searched: {$needle})");
     }
 }
 
-function assert_equals(
-    $expected,
-    $actual,
-    string $message = "Assertion failed: expected does not equal actual"
-): void
+function assert_equals($expected, $actual, string $message = "Assertion failed: expected does not equal actual"): void
 {
     if ($expected !== $actual) {
         throw new Exception(
             $message .
-            " (Beklenen: " .
+            " (Expected: " .
             var_export($expected, true) .
-            ", Gelen: " .
+            ", Got: " .
             var_export($actual, true) .
             ")"
         );
     }
 }
 
-function assert_false(
-    $condition,
-    string $message = "Assertion failed: condition is not false"
-): void
+function assert_false($condition, string $message = "Assertion failed: condition is not false"): void
 {
     if ($condition !== false) {
         throw new Exception($message);
@@ -161,39 +137,57 @@ function setupTestDatabase(): PDO
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
     ]);
 
-    $pdo->exec(
-        "CREATE TABLE items (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(50)) ENGINE=InnoDB;"
-    );
-    $pdo->exec("INSERT INTO items (name) VALUES ('Item 1'), ('Item 2');");
+    // Users table (matching seed structure)
+    $pdo->exec("
+        CREATE TABLE users (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(100) NOT NULL,
+            email VARCHAR(255) NOT NULL,
+            city VARCHAR(50) DEFAULT NULL,
+            status TINYINT NOT NULL DEFAULT 1,
+            balance DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY email_unique (email)
+        ) ENGINE=InnoDB
+    ");
+    $pdo->exec("INSERT INTO users (name, email, city, status, balance) VALUES
+        ('John Smith', 'john@example.com', 'New York', 1, 150.00),
+        ('Jane Doe', 'jane@example.com', 'Los Angeles', 1, 250.50)");
 
-    $pdo->exec(
-        "CREATE TABLE logs (id INT AUTO_INCREMENT PRIMARY KEY, message TEXT, log_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB;"
-    );
-    $pdo->exec(
-        "INSERT INTO logs (message) VALUES ('Log entry 1'), ('Log entry 2');"
-    );
+    // Categories table (matching seed structure)
+    $pdo->exec("
+        CREATE TABLE categories (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(100) NOT NULL,
+            description TEXT,
+            is_active TINYINT NOT NULL DEFAULT 1
+        ) ENGINE=InnoDB
+    ");
+    $pdo->exec("INSERT INTO categories (name, description, is_active) VALUES
+        ('Electronics', 'Electronic devices and accessories', 1),
+        ('Books', 'Printed and digital books', 1)");
 
-    $pdo->exec(
-        "CREATE TABLE user_sessions (session_id VARCHAR(255) PRIMARY KEY, user_id INT, data TEXT, last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB;"
-    );
-    $pdo->exec(
-        "INSERT INTO user_sessions (session_id, user_id, data) VALUES ('sess_abc123', 1, 'some session data');"
-    );
+    // Logs table (matching seed structure)
+    $pdo->exec("
+        CREATE TABLE logs (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            level ENUM('debug','info','warning','error') NOT NULL DEFAULT 'info',
+            message TEXT NOT NULL,
+            context TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX level_idx (level)
+        ) ENGINE=InnoDB
+    ");
+    $pdo->exec("INSERT INTO logs (level, message, context) VALUES
+        ('info', 'User logged in', '{\"user_id\": 1}'),
+        ('warning', 'Failed payment attempt', '{\"user_id\": 2, \"amount\": 99.99}')");
 
-    $currentUser = TEST_DB_USER;
-    $currentHost =
-        TEST_DB_HOST === "127.0.0.1" || TEST_DB_HOST === "localhost"
-            ? "localhost"
-            : "%";
-
+    // Create a view on categories
     try {
-        $pdo->exec(
-            "CREATE VIEW items_view AS SELECT id, name FROM items WHERE id = 1;"
-        );
+        $pdo->exec("CREATE VIEW active_categories AS SELECT id, name FROM categories WHERE is_active = 1");
     } catch (PDOException $e) {
-        echo "UYARI: View (items_view) oluşturulamadı. View ile ilgili testler etkilenebilir. Hata: " .
-            $e->getMessage() .
-            "\n";
+        echo "WARNING: Could not create view (active_categories). View-related tests may be affected. Error: " .
+            $e->getMessage() . "\n";
     }
 
     return $pdo;
@@ -207,38 +201,33 @@ function cleanupTestEnvironment(): void
             PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         ]);
         $pdoBase->exec("DROP DATABASE IF EXISTS " . TEST_DB_NAME);
-        echo "Test veritabanı (" . TEST_DB_NAME . ") silindi.\n";
+        echo "Test database (" . TEST_DB_NAME . ") dropped.\n";
     } catch (PDOException $e) {
-        echo "UYARI: Test veritabanı silinemedi: " . $e->getMessage() . "\n";
+        echo "WARNING: Could not drop test database: " . $e->getMessage() . "\n";
     }
 
     if (is_dir(TEST_BACKUP_PATH)) {
-        $files = new RecursiveIteratorIterator(
-            new RecursiveDirectoryIterator(
-                TEST_BACKUP_PATH,
-                RecursiveDirectoryIterator::SKIP_DOTS
-            ),
-            RecursiveIteratorIterator::CHILD_FIRST
-        );
-        foreach ($files as $fileinfo) {
-            @$fileinfo->isDir()
-                ? rmdir($fileinfo->getRealPath())
-                : unlink($fileinfo->getRealPath());
+        foreach (glob(TEST_BACKUP_PATH . '/*') as $file) {
+            if (is_file($file)) {
+                @unlink($file);
+            } elseif (is_dir($file)) {
+                @rmdir($file);
+            }
         }
         @rmdir(TEST_BACKUP_PATH);
-        echo "Test yedekleme dizini (" . TEST_BACKUP_PATH . ") temizlendi.\n";
+        echo "Test backup directory (" . TEST_BACKUP_PATH . ") cleaned.\n";
     }
 }
 
-echo "Test ortamı hazırlanıyor...\n";
+echo "Setting up test environment...\n";
 try {
     setupTestDatabase();
 } catch (PDOException $e) {
-    echo "KRİTİK HATA: Test veritabanı oluşturulamadı. Testler çalıştırılamıyor.\n";
-    echo "Hata: " . $e->getMessage() . "\n";
+    echo "CRITICAL ERROR: Could not create test database. Tests cannot run.\n";
+    echo "Error: " . $e->getMessage() . "\n";
     exit(1);
 }
-echo "Test ortamı hazır.\n\n";
+echo "Test environment ready.\n\n";
 
 $dbConfig = [
     "host" => TEST_DB_HOST,
@@ -249,92 +238,46 @@ $dbConfig = [
 ];
 $baseOptions = ["cacheTime" => 0, "removeDefiners" => true];
 
-test_case("1. Temel Yedekleme Oluşturma", function () use (
-    $dbConfig,
-    $baseOptions
-) {
-    $service = new DatabaseBackupService(
-        $dbConfig,
-        TEST_BACKUP_PATH,
-        $baseOptions
-    );
+test_case("1. Basic Backup Creation", function () use ($dbConfig, $baseOptions) {
+    $service = new DatabaseBackupService($dbConfig, TEST_BACKUP_PATH, $baseOptions);
     $result = $service->createBackup();
 
-    assert_true(
-        $result["success"],
-        "Yedekleme başarılı olmalıydı. Mesaj: " . ($result["message"] ?? "N/A")
-    );
-    assert_not_empty($result["fileName"], "Yedekleme dosya adı boş olmamalı.");
+    assert_true($result["success"], "Backup should succeed. Message: " . ($result["message"] ?? "N/A"));
+    assert_not_empty($result["fileName"], "Backup file name should not be empty.");
     $backupFilePath = TEST_BACKUP_PATH . "/" . $result["fileName"];
-    assert_file_exists($backupFilePath, "Yedek dosyası oluşturulmalıydı.");
+    assert_file_exists($backupFilePath, "Backup file should be created.");
 
     $content = file_get_contents($backupFilePath);
-    assert_contains_string($content, TEST_DB_NAME, "Yedek db adını içermeli.");
-    assert_contains_string(
-        $content,
-        "CREATE TABLE `items`",
-        "items tablosunun yapısını içermeli."
-    );
-    assert_contains_string(
-        $content,
-        "INSERT INTO `items`",
-        "items tablosunun verisini içermeli."
-    );
-    assert_contains_string(
-        $content,
-        "Item 1",
-        "items tablosunun içeriğini içermeli."
-    );
-    assert_contains_string(
-        $content,
-        "VIEW `items_view`",
-        "items_view yapısını içermeli."
-    );
+    assert_contains_string($content, TEST_DB_NAME, "Backup should contain database name.");
+    assert_contains_string($content, "CREATE TABLE `users`", "Backup should contain users table structure.");
+    assert_contains_string($content, "INSERT INTO `users`", "Backup should contain users table data.");
+    assert_contains_string($content, "VIEW `active_categories`", "Backup should contain active_categories view.");
 });
 
-test_case("2. Sıkıştırılmış Yedekleme Oluşturma", function () use (
-    $dbConfig,
-    $baseOptions
-) {
+test_case("2. Compressed Backup Creation", function () use ($dbConfig, $baseOptions) {
     $options = array_merge($baseOptions, ["compressOutput" => true]);
     $service = new DatabaseBackupService($dbConfig, TEST_BACKUP_PATH, $options);
     $result = $service->createBackup();
 
-    assert_true(
-        $result["success"],
-        "Sıkıştırılmış yedekleme başarılı olmalıydı."
-    );
-    assert_true(
-        str_ends_with($result["fileName"], ".sql.gz"),
-        "Dosya adı .sql.gz ile bitmeli."
-    );
+    assert_true($result["success"], "Compressed backup should succeed.");
+    assert_true(str_ends_with($result["fileName"], ".sql.gz"), "File name should end with .sql.gz.");
     $backupFilePath = TEST_BACKUP_PATH . "/" . $result["fileName"];
-    assert_file_exists(
-        $backupFilePath,
-        "Sıkıştırılmış yedek dosyası oluşturulmalıydı."
-    );
+    assert_file_exists($backupFilePath, "Compressed backup file should be created.");
 
     if (function_exists("gzopen")) {
         $gz = gzopen($backupFilePath, "r");
         $content = "";
-        while (!gzeof($gz) && strlen($content) < 2048) {
-            $content .= gzread($gz, 1024);
+        while (!gzeof($gz) && strlen($content) < 65536) {
+            $content .= gzread($gz, 8192);
         }
         gzclose($gz);
-        assert_contains_string(
-            $content,
-            "CREATE TABLE `items`",
-            "Sıkıştırılmış yedek 'items' yapısını içermeli."
-        );
+        assert_contains_string($content, "CREATE TABLE `users`", "Compressed backup should contain users table structure.");
     } else {
-        echo "UYARI: gzopen fonksiyonu yok, sıkıştırılmış içerik kontrolü atlandı.\n";
+        echo "WARNING: gzopen not available, compressed content check skipped.\n";
     }
 });
 
-test_case("3. Yedekleri Listeleme ve Temizleme (Sayıya Göre)", function () use (
-    $dbConfig,
-    $baseOptions
-) {
+test_case("3. Backup Listing and Cleanup (by count)", function () use ($dbConfig, $baseOptions) {
     $options = array_merge($baseOptions, ["maxBackupCount" => 2]);
     $service = new DatabaseBackupService($dbConfig, TEST_BACKUP_PATH, $options);
 
@@ -344,194 +287,270 @@ test_case("3. Yedekleri Listeleme ve Temizleme (Sayıya Göre)", function () use
     sleep(1);
     $result3 = $service->createBackup();
 
-    assert_true($result3["success"], "3. yedekleme başarılı olmalıydı.");
+    assert_true($result3["success"], "3rd backup should succeed.");
 
     $backups = $service->listBackups();
-    assert_equals(
-        2,
-        count($backups),
-        "Maksimum yedek sayısı (2) korunduğu için listede 2 yedek olmalı. Bulunan: " .
-        count($backups)
-    );
+    assert_equals(2, count($backups), "Should keep max 2 backups. Found: " . count($backups));
 
     $filesInDir = glob(TEST_BACKUP_PATH . "/*.sql*");
-    assert_equals(
-        2,
-        count($filesInDir),
-        "Dizinde de maksimum yedek sayısı (2) kadar dosya olmalı."
-    );
+    assert_equals(2, count($filesInDir), "Directory should also have max 2 backup files.");
 });
 
-test_case("4. Yedek Silme", function () use ($dbConfig, $baseOptions) {
-    $service = new DatabaseBackupService(
-        $dbConfig,
-        TEST_BACKUP_PATH,
-        $baseOptions
-    );
+test_case("4. Backup Deletion", function () use ($dbConfig, $baseOptions) {
+    $service = new DatabaseBackupService($dbConfig, TEST_BACKUP_PATH, $baseOptions);
     $createResult = $service->createBackup();
     $fileName = $createResult["fileName"];
     $filePath = TEST_BACKUP_PATH . "/" . $fileName;
 
-    assert_file_exists($filePath, "Silmeden önce dosya var olmalı.");
+    assert_file_exists($filePath, "File should exist before deletion.");
     $deleteResult = $service->deleteBackup($fileName);
-    assert_true($deleteResult["success"], "Dosya silme başarılı olmalı.");
-    assert_false(
-        file_exists($filePath),
-        "Dosya silindikten sonra var olmamalı."
-    );
+    assert_true($deleteResult["success"], "Deletion should succeed.");
+    assert_false(file_exists($filePath), "File should not exist after deletion.");
 });
 
-test_case("5. Hariç Tutulan Tablolar", function () use (
-    $dbConfig,
-    $baseOptions
-) {
+test_case("5. Excluded Tables", function () use ($dbConfig, $baseOptions) {
+    $options = array_merge($baseOptions, ["excludedTables" => ["logs"]]);
+    $service = new DatabaseBackupService($dbConfig, TEST_BACKUP_PATH, $options);
+    $result = $service->createBackup();
+
+    assert_true($result["success"], "Backup with excluded table should succeed.");
+    $backupFilePath = TEST_BACKUP_PATH . "/" . $result["fileName"];
+    assert_file_exists($backupFilePath, "Backup file should be created.");
+
+    $content = file_get_contents($backupFilePath);
+    assert_contains_string($content, "CREATE TABLE `users`", "users table should be in backup.");
+    assert_false(strpos($content, "CREATE TABLE `logs`") !== false, "logs table should NOT be in backup.");
+    assert_false(strpos($content, "INSERT INTO `logs`") !== false, "logs table data should NOT be in backup.");
+});
+
+test_case("6. Table Modes (Structure Only)", function () use ($dbConfig, $baseOptions) {
     $options = array_merge($baseOptions, [
-        "excludedTables" => ["logs"],
+        "tableModes" => ["users" => "structure_only"],
     ]);
     $service = new DatabaseBackupService($dbConfig, TEST_BACKUP_PATH, $options);
     $result = $service->createBackup();
 
-    assert_true(
-        $result["success"],
-        "Hariç tutulan tabloyla yedekleme başarılı olmalıydı."
-    );
+    assert_true($result["success"], "Backup with table mode should succeed.");
     $backupFilePath = TEST_BACKUP_PATH . "/" . $result["fileName"];
-    assert_file_exists($backupFilePath, "Yedek dosyası oluşturulmalıydı.");
+    assert_file_exists($backupFilePath, "Backup file should be created.");
 
     $content = file_get_contents($backupFilePath);
-    assert_contains_string(
-        $content,
-        "CREATE TABLE `items`",
-        "'items' tablosu yedekte olmalı."
-    );
-    assert_false(
-        strpos($content, "CREATE TABLE `logs`") !== false,
-        "'logs' tablosu yedekte OLMAMALI."
-    );
-    assert_false(
-        strpos($content, "INSERT INTO `logs`") !== false,
-        "'logs' tablosunun verisi yedekte OLMAMALI."
-    );
+    assert_contains_string($content, "CREATE TABLE `users`", "users structure should be in backup.");
+    assert_false(strpos($content, "INSERT INTO `users`") !== false, "users data should NOT be in backup.");
+    assert_contains_string($content, "CREATE TABLE `categories`", "categories (default mode) should be fully in backup.");
+    assert_contains_string($content, "INSERT INTO `categories`", "categories data should be in backup.");
 });
 
-test_case("6. Tablo Modları (Structure Only)", function () use (
-    $dbConfig,
-    $baseOptions
-) {
-    $options = array_merge($baseOptions, [
-        "tableModes" => [
-            "user_sessions" => "structure_only",
-        ],
-    ]);
-    $service = new DatabaseBackupService($dbConfig, TEST_BACKUP_PATH, $options);
-    $result = $service->createBackup();
-
-    assert_true(
-        $result["success"],
-        "Tablo moduyla yedekleme başarılı olmalıydı."
-    );
-    $backupFilePath = TEST_BACKUP_PATH . "/" . $result["fileName"];
-    assert_file_exists($backupFilePath, "Yedek dosyası oluşturulmalıydı.");
-
-    $content = file_get_contents($backupFilePath);
-    assert_contains_string(
-        $content,
-        "CREATE TABLE `user_sessions`",
-        "'user_sessions' tablosunun yapısı yedekte olmalı."
-    );
-    assert_false(
-        strpos($content, "INSERT INTO `user_sessions`") !== false,
-        "'user_sessions' tablosunun verisi yedekte OLMAMALI."
-    );
-    assert_contains_string(
-        $content,
-        "CREATE TABLE `items`",
-        "'items' tablosu (varsayılan mod) tam olarak yedekte olmalı."
-    );
-    assert_contains_string(
-        $content,
-        "INSERT INTO `items`",
-        "'items' tablosunun verisi yedekte olmalı."
-    );
-});
-
-test_case("7. Definer Kaldırma (View ile)", function () use (
-    $dbConfig,
-    $baseOptions
-) {
-    $optionsWithRemoveDefiner = array_merge($baseOptions, [
-        "removeDefiners" => true,
-    ]);
-    $serviceWithRemove = new DatabaseBackupService(
-        $dbConfig,
-        TEST_BACKUP_PATH,
-        $optionsWithRemoveDefiner
-    );
+test_case("7. DEFINER Removal (with View)", function () use ($dbConfig, $baseOptions) {
+    $optionsWithRemoveDefiner = array_merge($baseOptions, ["removeDefiners" => true]);
+    $serviceWithRemove = new DatabaseBackupService($dbConfig, TEST_BACKUP_PATH, $optionsWithRemoveDefiner);
     $resultWithRemove = $serviceWithRemove->createBackup();
 
-    assert_true(
-        $resultWithRemove["success"],
-        "Definer kaldırma aktifken yedekleme başarılı olmalı."
-    );
-    $backupFilePathWithRemove =
-        TEST_BACKUP_PATH . "/" . $resultWithRemove["fileName"];
-    assert_file_exists(
-        $backupFilePathWithRemove,
-        "Yedek dosyası (removeDefiner=true) oluşturulmalıydı."
-    );
+    assert_true($resultWithRemove["success"], "Backup with removeDefiners=true should succeed.");
+    $backupFilePathWithRemove = TEST_BACKUP_PATH . "/" . $resultWithRemove["fileName"];
+    assert_file_exists($backupFilePathWithRemove, "Backup file (removeDefiner=true) should be created.");
     $contentWithRemove = file_get_contents($backupFilePathWithRemove);
 
-    assert_false(
-        strpos($contentWithRemove, "DEFINER=") !== false,
-        "removeDefiners true iken yedekte 'DEFINER=' ifadesi OLMAMALI."
-    );
-    assert_contains_string(
-        $contentWithRemove,
-        "VIEW `items_view`",
-        "View tanımı (removeDefiner=true) yedekte olmalı."
-    );
+    assert_false(strpos($contentWithRemove, "DEFINER=") !== false, "Backup with removeDefiners=true should NOT contain DEFINER=.");
+    assert_contains_string($contentWithRemove, "VIEW `active_categories`", "View should be in backup (removeDefiner=true).");
 
-    $optionsWithoutRemoveDefiner = array_merge($baseOptions, [
-        "removeDefiners" => false,
-    ]);
-    $serviceWithoutRemove = new DatabaseBackupService(
-        $dbConfig,
-        TEST_BACKUP_PATH,
-        $optionsWithoutRemoveDefiner
-    );
+    $optionsWithoutRemoveDefiner = array_merge($baseOptions, ["removeDefiners" => false]);
+    $serviceWithoutRemove = new DatabaseBackupService($dbConfig, TEST_BACKUP_PATH, $optionsWithoutRemoveDefiner);
     $resultWithoutRemove = $serviceWithoutRemove->createBackup();
 
-    assert_true(
-        $resultWithoutRemove["success"],
-        "Definer kaldırma kapalıyken yedekleme başarılı olmalı."
-    );
-    $backupFilePathWithoutRemove =
-        TEST_BACKUP_PATH . "/" . $resultWithoutRemove["fileName"];
-    assert_file_exists(
-        $backupFilePathWithoutRemove,
-        "Yedek dosyası (removeDefiner=false) oluşturulmalıydı."
-    );
+    assert_true($resultWithoutRemove["success"], "Backup with removeDefiners=false should succeed.");
+    $backupFilePathWithoutRemove = TEST_BACKUP_PATH . "/" . $resultWithoutRemove["fileName"];
+    assert_file_exists($backupFilePathWithoutRemove, "Backup file (removeDefiner=false) should be created.");
     $contentWithoutRemove = file_get_contents($backupFilePathWithoutRemove);
 
-    assert_contains_string(
-        $contentWithoutRemove,
-        "VIEW `items_view`",
-        "View tanımı (removeDefiner=false) yedekte olmalı."
-    );
+    assert_contains_string($contentWithoutRemove, "VIEW `active_categories`", "View should be in backup (removeDefiner=false).");
 });
 
-echo "\n\n--- TEST ÖZETİ ---\n";
-echo "Geçen Testler: {$testResults["passed"]}\n";
-echo "Başarısız Testler: {$testResults["failed"]}\n";
+test_case("8. Table Modes (Data Only)", function () use ($dbConfig, $baseOptions) {
+    $options = array_merge($baseOptions, [
+        "tableModes" => ["users" => "data_only"],
+    ]);
+    $service = new DatabaseBackupService($dbConfig, TEST_BACKUP_PATH, $options);
+    $result = $service->createBackup();
+
+    assert_true($result["success"], "Backup with data_only mode should succeed.");
+    $backupFilePath = TEST_BACKUP_PATH . "/" . $result["fileName"];
+    assert_file_exists($backupFilePath, "Backup file should be created.");
+
+    $content = file_get_contents($backupFilePath);
+    assert_false(strpos($content, "CREATE TABLE `users`") !== false, "users CREATE should NOT be in backup (data_only).");
+    assert_contains_string($content, "INSERT INTO `users`", "users INSERT should be in backup (data_only).");
+    assert_contains_string($content, "CREATE TABLE `categories`", "categories (default mode) should have structure.");
+    assert_contains_string($content, "INSERT INTO `categories`", "categories data should be in backup.");
+});
+
+test_case("9. Prepare Download", function () use ($dbConfig, $baseOptions) {
+    $service = new DatabaseBackupService($dbConfig, TEST_BACKUP_PATH, $baseOptions);
+    $createResult = $service->createBackup();
+    $fileName = $createResult["fileName"];
+
+    $download = $service->prepareDownload($fileName);
+    assert_true($download["success"], "Prepare download should succeed.");
+    assert_equals($fileName, $download["fileName"], "File name should match.");
+    assert_file_exists($download["filePath"] ?? '', "File path should exist.");
+    assert_equals('application/sql', $download["mimeType"], "Mime type should be application/sql.");
+    assert_false($download["isCompressed"], "Plain SQL should not be marked compressed.");
+});
+
+test_case("10. List Backups", function () use ($dbConfig, $baseOptions) {
+    $service = new DatabaseBackupService($dbConfig, TEST_BACKUP_PATH, $baseOptions);
+    $service->createBackup();
+    sleep(1);
+    $service->createBackup();
+
+    $backups = $service->listBackups();
+    assert_equals(2, count($backups), "Should list exactly 2 backups.");
+    assert_true(isset($backups[0]["file_name"]), "Backup entry should have file_name.");
+    assert_true(isset($backups[0]["size"]), "Backup entry should have size.");
+    assert_true(isset($backups[0]["date"]), "Backup entry should have date.");
+});
+
+test_case("11. Backup Cleanup by Age", function () use ($dbConfig, $baseOptions) {
+    $oldFile = TEST_BACKUP_PATH . "/backup_old_test_2020-01-01_00-00-00.sql";
+    file_put_contents($oldFile, "-- old backup");
+    touch($oldFile, strtotime("-10 days"));
+
+    $options = array_merge($baseOptions, ["maxBackupAgeDays" => 7]);
+    $service = new DatabaseBackupService($dbConfig, TEST_BACKUP_PATH, $options);
+    $service->createBackup();
+
+    assert_false(file_exists($oldFile), "Old backup should be deleted by age limit.");
+});
+
+test_case("12. Data Integrity - Row Count Match", function () use ($dbConfig, $baseOptions) {
+    $service = new DatabaseBackupService($dbConfig, TEST_BACKUP_PATH, $baseOptions);
+    $result = $service->createBackup();
+    assert_true($result["success"], "Backup should succeed.");
+    $backupFilePath = TEST_BACKUP_PATH . "/" . $result["fileName"];
+    $content = file_get_contents($backupFilePath);
+
+    preg_match_all('/INSERT INTO `users` \([^)]+\) VALUES\s*\n(.+?);/s', $content, $matches);
+    $backupRowCount = 0;
+    foreach ($matches[1] as $block) {
+        $backupRowCount += substr_count($block, '),') + 1;
+    }
+
+    $pdo = new PDO(
+        "mysql:host=" . TEST_DB_HOST . ";dbname=" . TEST_DB_NAME . ";charset=" . TEST_DB_CHARSET,
+        TEST_DB_USER,
+        TEST_DB_PASS,
+        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
+    );
+    $dbRowCount = (int) $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
+
+    assert_equals($dbRowCount, $backupRowCount, "User row count in backup should match database.");
+});
+
+test_case("13. Empty Table Backup", function () use ($dbConfig, $baseOptions) {
+    $pdo = new PDO(
+        "mysql:host=" . TEST_DB_HOST . ";dbname=" . TEST_DB_NAME . ";charset=" . TEST_DB_CHARSET,
+        TEST_DB_USER,
+        TEST_DB_PASS,
+        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
+    );
+    $pdo->exec("CREATE TABLE empty_test_table (id INT PRIMARY KEY, name VARCHAR(50))");
+
+    $service = new DatabaseBackupService($dbConfig, TEST_BACKUP_PATH, $baseOptions);
+    $result = $service->createBackup();
+    assert_true($result["success"], "Backup with empty table should succeed.");
+
+    $content = file_get_contents(TEST_BACKUP_PATH . "/" . $result["fileName"]);
+    assert_contains_string($content, "CREATE TABLE `empty_test_table`", "Empty table structure should be in backup.");
+    assert_false(strpos($content, "INSERT INTO `empty_test_table`") !== false, "Empty table should not have INSERT.");
+});
+
+test_case("14. Backup Restore and Data Integrity", function () use ($dbConfig, $baseOptions) {
+    $service = new DatabaseBackupService($dbConfig, TEST_BACKUP_PATH, $baseOptions);
+    $result = $service->createBackup();
+    assert_true($result["success"], "Backup should succeed.");
+    $backupFilePath = TEST_BACKUP_PATH . "/" . $result["fileName"];
+    assert_file_exists($backupFilePath, "Backup file should exist for restore test.");
+
+    $restoreDbName = TEST_DB_NAME . "_restore";
+    $dsnBase = "mysql:host=" . TEST_DB_HOST . ";charset=" . TEST_DB_CHARSET;
+    $pdoBase = new PDO($dsnBase, TEST_DB_USER, TEST_DB_PASS, [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+    ]);
+    $pdoBase->exec("DROP DATABASE IF EXISTS {$restoreDbName}");
+    $pdoBase->exec("CREATE DATABASE {$restoreDbName} CHARACTER SET " . TEST_DB_CHARSET . " COLLATE " . TEST_DB_CHARSET . "_general_ci");
+    $pdoBase = null;
+
+    $cmd = sprintf(
+        'mysql -h%s -P%s -u%s %s %s < %s',
+        escapeshellarg(TEST_DB_HOST),
+        escapeshellarg(TEST_DB_PORT),
+        escapeshellarg(TEST_DB_USER),
+        TEST_DB_PASS ? '-p' . escapeshellarg(TEST_DB_PASS) : '',
+        escapeshellarg($restoreDbName),
+        escapeshellarg($backupFilePath)
+    );
+    exec($cmd . ' 2>&1', $output, $exitCode);
+    assert_equals(0, $exitCode, "MySQL restore command should succeed. Output: " . implode("\n", $output));
+
+    $dsnRestore = "mysql:host=" . TEST_DB_HOST . ";dbname=" . $restoreDbName . ";charset=" . TEST_DB_CHARSET;
+    $pdoRestore = new PDO($dsnRestore, TEST_DB_USER, TEST_DB_PASS, [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+    ]);
+
+    $originalUsers = (new PDO(
+        "mysql:host=" . TEST_DB_HOST . ";dbname=" . TEST_DB_NAME . ";charset=" . TEST_DB_CHARSET,
+        TEST_DB_USER,
+        TEST_DB_PASS,
+        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
+    ))->query("SELECT email, name, city, status, balance FROM users ORDER BY id")->fetchAll(PDO::FETCH_ASSOC);
+
+    $restoredUsers = $pdoRestore->query("SELECT email, name, city, status, balance FROM users ORDER BY id")->fetchAll(PDO::FETCH_ASSOC);
+    assert_equals($originalUsers, $restoredUsers, "Restored users data should match original.");
+
+    $originalCategories = (new PDO(
+        "mysql:host=" . TEST_DB_HOST . ";dbname=" . TEST_DB_NAME . ";charset=" . TEST_DB_CHARSET,
+        TEST_DB_USER,
+        TEST_DB_PASS,
+        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
+    ))->query("SELECT name, description, is_active FROM categories ORDER BY id")->fetchAll(PDO::FETCH_ASSOC);
+
+    $restoredCategories = $pdoRestore->query("SELECT name, description, is_active FROM categories ORDER BY id")->fetchAll(PDO::FETCH_ASSOC);
+    assert_equals($originalCategories, $restoredCategories, "Restored categories data should match original.");
+
+    $pdoBase = new PDO($dsnBase, TEST_DB_USER, TEST_DB_PASS, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    $pdoBase->exec("DROP DATABASE IF EXISTS {$restoreDbName}");
+});
+
+test_case("15. Invalid Database Config", function () {
+    $badConfig = [
+        "host" => "999.999.999.999",
+        "dbname" => "nonexistent",
+        "user" => "baduser",
+        "pass" => "badpass",
+        "charset" => "utf8mb4",
+    ];
+    $caught = false;
+    try {
+        $service = new DatabaseBackupService($badConfig, TEST_BACKUP_PATH, ["cacheTime" => 0]);
+        $service->createBackup();
+    } catch (Exception $e) {
+        $caught = true;
+    }
+    assert_true($caught, "Should throw exception for invalid DB config.");
+});
+
+echo "\n\n--- TEST SUMMARY ---\n";
+echo "Passed: {$testResults["passed"]}\n";
+echo "Failed: {$testResults["failed"]}\n";
 if ($testResults["failed"] > 0) {
-    echo "\n--- BAŞARISIZ TEST DETAYLARI ---\n";
+    echo "\n--- FAILED TEST DETAILS ---\n";
     foreach ($testResults["details"] as $detail) {
         if ($detail["status"] === "FAILED") {
-            echo "Açıklama: {$detail["description"]}\n  Hata: {$detail["message"]}\n\n";
+            echo "Description: {$detail["description"]}\n  Error: {$detail["message"]}\n\n";
         }
     }
 }
-echo "\nTest ortamı temizleniyor...\n";
+echo "\nCleaning up test environment...\n";
 cleanupTestEnvironment();
-echo "Testler tamamlandı.\n";
+echo "Tests completed.\n";
 exit($testResults["failed"] > 0 ? 1 : 0);
